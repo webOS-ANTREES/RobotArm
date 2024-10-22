@@ -29,6 +29,7 @@
     HG Kim          2024.10.08      WLKATA_with_python      큐 자료형 사용 시도
     HG Kim          2024.10.09      WLKATA_with_python      큐 자료형 사용 시도
     HG Kim          2024.10.11      WLKATA_with_python      우선순위 큐 자료형 사용 시도
+    JY Seong        2024.
     
     
 """
@@ -40,9 +41,13 @@ import queue
 
 # 로봇 팔 객체 생성
 arm = WlkataMirobot(portname='/dev/tty.usbserial-1110', debug=False)
-#BROKER_ADDRESS = "172.20.48.180"  # MQTT 브로커 주소
-#BROKER_ADDRESS="192.168.50.248"
-BROKER_ADDRESS = "165.229.185.243"
+#BROKER_ADDRESS  = "172.20.48.180"  # MQTT 브로커 주소
+#BROKER_ADDRESS = "192.168.50.248"
+# 태우 노트북 핫스팟
+BROKER_ADDRESS = "192.168.137.147"
+#대장 핫스팟
+#BROKER_ADDRESS = "192.0.0.2"
+#BROKER_ADDRESS = "165.229.185.243"
 TOPIC = "robot/location"  # 위치 값을 받을 토픽
 
 # 슬라이더 끝점 정의
@@ -59,10 +64,11 @@ forward_or_reverse = None
 x_center = None
 y_center = None
 box_height = None
+operating_message = None
 num_queue_data = 0
 #데이터 정의 
-forward_initial_angle = {1: -90.0, 2: -20.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0}
-reverse_initial_angle = {1: 90.0, 2: -20.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0}
+forward_initial_angle = {1: -90.0, 2: -25.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0}
+reverse_initial_angle = {1: 90.0, 2: -25.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0}
 forward_store_angle = {1: 0.0, 2: 50.0, 3: 0.0, 4: 0.0, 5: -40.0, 6: 0.0}
 reverse_store_angle = {1: 130.0, 2: 30.0, 3: 10.0, 4: 0.0, 5: -40.0, 6: 0.0}
 before_store_angle_forward = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0}
@@ -71,17 +77,15 @@ after_store_angle_forward = {1: 0.0, 2: -20.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0
 after_store_angle_reverse = {1: 130.0, 2: -20.0, 3: 60.0, 4: 0.0, 5: -20.0, 6: 0.0}
 step_before_forward_target = {1: -90.0, 2: -30.0, 3: 10.0, 4: 10.0, 5: -90.0, 6: 0.0}
 step_before_reverse_target = {1: 90.0, 2: -30.0, 3: 10.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_13cm_700px = {1: -90.0, 2: 5.0, 3: -12.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_11cm_600px = {1: -90.0, 2: 5.0, 3: -18.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_9cm_500px = {1: -90.0, 2: 10.0, 3: -28.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_7cm_400px = {1: -90.0, 2: 10.0, 3: -33.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_30cm_300px = {1: -90.0, 2: 12.0, 3: -41.0, 4: 10.0, 5: -90.0, 6: 0.0}
-a_28cm_200px = {1: -90.0, 2: 27.0, 3: -70.0, 4: 10.0, 5: -70.0, 6: 0.0}
-a_26cm_100px = {1: -90.0, 2: 50.0, 3: -112.0, 4: 10.0, 5: -60.0, 6: 0.0}
+a_11cm_600px = {1: -90.0, 2: 0.0, 3: -10.0, 4: 5.0, 5: -90.0, 6: 0.0}
+a_9cm_500px = {1: -90.0, 2: 5.0, 3: -20.0, 4: 5.0, 5: -85.0, 6: 0.0}
+a_7cm_400px = {1: -90.0, 2: 8.0, 3: -30.0, 4: 5.0, 5: -80.0, 6: 0.0}
+a_30cm_300px = {1: -90.0, 2: 12.0, 3: -40.0, 4: 5.0, 5: -75.0, 6: 0.0}
+a_28cm_200px = {1: -90.0, 2: 33.0, 3: -77.0, 4: 5.0, 5: -57.0, 6: 0.0}
+a_26cm_100px = {1: -90.0, 2: 48.0, 3: -100.0, 4: 5.0, 5: -67.0, 6: 0.0}
 
 # 높이와 px 값 매핑 테이블
 px_mapping = {
-    700: a_13cm_700px,
     600: a_11cm_600px,
     500: a_9cm_500px,   # 500이 300px에 매핑
     400: a_7cm_400px,
@@ -171,8 +175,14 @@ def store_data_in_globals(data):
     
 # MQTT 메시지 콜백 함수
 def on_message(client, userdata, message):
-    global position, priority_queue,num_queue_data
-    
+    global position, priority_queue,num_queue_data,operating_message
+
+    if message.payload.decode() == "ON" or message.payload.decode() == "OFF":
+        operating_message = message.payload.decode()  # 메시지 디코딩
+        print(f"Received message: {operating_message}")  # 수신된 메시지 출력
+     
+
+
     try:
         # MQTT 메시지 페이로드를 디코딩하여 처리
         message_payload = message.payload.decode("utf-8")
@@ -189,7 +199,7 @@ def on_message(client, userdata, message):
 def setup_mqtt():
     client = mqtt.Client()
     client.on_message = on_message
-    client.connect(BROKER_ADDRESS)
+    client.connect(BROKER_ADDRESS)  # 1884로 포트 변경
     client.subscribe(TOPIC)
     client.loop_start()  # 백그라운드에서 MQTT 메시지 수신 시작
     return client
@@ -199,8 +209,8 @@ def initialize_robot_arm(arm):
     print("Unlocking all axes and clearing alarm...")
     arm.unlock_all_axis()  # 모든 축의 알람을 해제하여 idle 상태로 복귀
     arm.home()
-    arm.set_joint_angle(forward_initial_angle)  # 1번 관절을 180도 회전
-    arm.gripper_close()
+    arm.set_joint_angle(forward_initial_angle)
+    
     
 def rotate_robot_arm(arm, is_forward_direction):
     """로봇 팔의 몸통을 회전"""
@@ -286,11 +296,11 @@ def calculate_gripper_x_position(arm, x,current_position):
         print("Error: x_center is None, cannot calculate gripper position.")
         return None
     
-    diff = 750 - x
+    diff = 837 - x
     # 몫 계산
-    quotient = diff // 46
+    quotient = diff // 56
     # 나머지 계산 후 소수점 둘째 자리까지 반올림
-    remainder = round((diff % 46) / 46, 2)
+    remainder = round((diff % 56) / 56, 2)
     
     # 최종 결과 계산
     if forward_or_reverse.strip() == "forward" or forward_or_reverse.strip() == "captureforward":
@@ -544,15 +554,27 @@ if __name__ == "__main__":
 
     # MQTT 연결 설정
     mqtt_client = setup_mqtt()
-    
-    
+    print("success connect broker!!")
+ 
     # 무한 반복 작업 실행
     while True:
-        # forward 값이 있을 때 실행 (정방향)
-        if not priority_queue.empty():
-            print("=========================")
-            harvest_berry()
+        print("-----------\n operating message : ")
+        print(operating_message)
+        if operating_message == "ON":
+            print("Operating message is ON, checking priority queue...")
+            # forward 값이 있을 때 실행 (정방향)
+            if not priority_queue.empty():
+                print("=========================")
+                harvest_berry()
+            else:
+                is_forward_direction = move_slider(arm, is_forward_direction)  # 슬라이더를 기본 동작(0mm에서 485mm 또는 485mm에서 0mm)으로 이동
+                print(is_forward_direction)
         else:
-            is_forward_direction = move_slider(arm, is_forward_direction)  # 슬라이더를 기본 동작(0mm에서 485mm 또는 485mm에서 0mm)으로 이동
-            print(is_forward_direction)
+            arm.set_slider_posi(0)
+            arm.set_joint_angle(forward_initial_angle)
+            is_forward_direction=True
+            print("waiting for ON!")
+            time.sleep(1)
+
         
+     
